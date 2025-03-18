@@ -1,33 +1,29 @@
 use anyhow::{Error as AErr, Result};
-use std::fs::{self};
+use std::fs::{self, DirEntry};
 use std::path::Path;
 use std::{collections::HashMap, path::PathBuf};
+fn get_files(path: &PathBuf) -> Result<Vec<DirEntry>, AErr> {
+    Ok(fs::read_dir(path)?
+        .filter_map(Result::ok)
+        .collect::<Vec<_>>())
+}
 
 fn rename(path: impl Into<String>, file_extension: impl Into<String>) -> Result<(), AErr> {
     let file_ext = format!(".{}", file_extension.into());
     let path = PathBuf::from(path.into()).canonicalize()?;
-    let files = match fs::read_dir(&path) {
-        Ok(entries) => entries.filter_map(Result::ok).collect::<Vec<_>>(),
-        Err(err) => {
-            eprintln!("Error reading directory: {}", err);
-            return Ok(());
-        }
-    };
-
+    let files = get_files(&path)?;
     let mut name_counters: HashMap<String, usize> = HashMap::new();
 
     for entry in files {
         let file_name = match entry.file_name().to_str() {
             Some(name) => name.to_string(),
             None => {
-                eprintln!("Invalid UTF-8 in filename, skipping");
+                eprintln!("Invalid UTF-8 in filename, skipping {entry:?}");
                 continue;
             }
         };
 
         if file_name.contains(&file_ext) {
-            let file_name = file_name.replace(&file_ext, "");
-
             let base_name = file_name
                 .replace(&file_ext, "")
                 .to_lowercase()
@@ -53,17 +49,20 @@ fn rename(path: impl Into<String>, file_extension: impl Into<String>) -> Result<
     }
     Ok(())
 }
-fn main() -> Result<(), AErr> {
+fn main() {
     let args: Vec<String> = std::env::args().collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
 
     match args.len().cmp(&3) {
-        std::cmp::Ordering::Equal => rename(args[1], args[2])?,
-        std::cmp::Ordering::Greater => println!("too many args"),
+        std::cmp::Ordering::Equal => match rename(args[1], args[2]) {
+            Ok(_) => println!("Finished renaming files"),
+            Err(e) => eprintln!("Error: {e}"),
+        },
+        std::cmp::Ordering::Greater => {
+            println!("Too many args. Usage:\n    renamer <path> <extension (no .)>")
+        }
         std::cmp::Ordering::Less => {
-            println!("you have to provide a path and an extension:\nrename ./assets glb")
+            println!("Not enough args. Usage:\n    renamer <path> <extension (no .)>")
         }
     }
-
-    Ok(())
 }
