@@ -17,22 +17,30 @@ fn rename(path: impl Into<String>, file_extension: impl Into<String>) -> Result<
     let mut name_counters: HashMap<String, usize> = HashMap::new();
 
     for entry in files {
-        let file_name = entry.file_name().to_str().expect("crap").to_string();
+        let file_name = match entry.file_name().to_str() {
+            Some(name) => name.to_string(),
+            None => {
+                eprintln!("Invalid UTF-8 in filename, skipping");
+                continue;
+            }
+        };
+
         if file_name.contains(&file_ext) {
             let file_name = file_name.replace(&file_ext, "");
-            let lowercased = file_name.to_lowercase();
 
-            let lowercased = lowercased.replace(" ", "_");
-
-            let base_name = lowercased.split('-').next().unwrap_or("").to_string();
+            let base_name = file_name
+                .replace(&file_ext, "")
+                .to_lowercase()
+                .replace(" ", "_")
+                .split('-')
+                .next()
+                .unwrap_or("unknown")
+                .to_string();
 
             let new_index = name_counters.entry(base_name.clone()).or_insert(0);
-            let new_name = if lowercased.contains('-') {
-                format!("{base_name}_{new_index}{file_ext}")
-            } else {
-                format!("{base_name}{file_ext}")
-            };
+            let new_name = format!("{base_name}_{new_index}{file_ext}");
             *new_index += 1;
+
             let old_path = entry.path();
             let new_path = Path::new(&path).join(&new_name);
 
